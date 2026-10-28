@@ -1,9 +1,11 @@
-// Emulador educativo x86-64 - Arquitectura de Máquinas.
+// Emulador x86-64: punto de entrada.
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include "cli.hpp"
+#include "trace.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -26,6 +28,17 @@ static std::vector<std::string> utf8Arguments() {
     LocalFree(w);
     return args;
 }
+
+// Color sólo si la salida es una consola que acepta códigos ANSI.
+static bool consoleSupportsColor() {
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode = 0;
+    if (h == INVALID_HANDLE_VALUE || !GetConsoleMode(h, &mode)) return false;  // archivo o tubería
+    return SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0;
+}
+#else
+#include <unistd.h>
+static bool consoleSupportsColor() { return isatty(STDOUT_FILENO) != 0; }
 #endif
 
 int main(int argc, char** argv) {
@@ -33,13 +46,12 @@ int main(int argc, char** argv) {
     // Mostrar correctamente tildes y eñes en la consola de Windows.
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
-#endif
-#ifdef _WIN32
     (void)argc;
     (void)argv;
     std::vector<std::string> args = utf8Arguments();
 #else
     std::vector<std::string> args(argv + 1, argv + argc);
 #endif
+    emu::setColorEnabled(!std::getenv("NO_COLOR") && consoleSupportsColor());
     return emu::runCommandLine(args, std::cin, std::cout);
 }

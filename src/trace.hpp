@@ -47,6 +47,19 @@ struct TraceOptions {
     bool compact = false;  // sólo registros que cambian (opcional)
 };
 
+// Color en la consola (códigos ANSI). Apagado por defecto: main lo activa sólo
+// cuando la salida es una consola, así las tuberías y las pruebas reciben texto limpio.
+void setColorEnabled(bool on);
+bool colorEnabled();
+struct Paint {
+    const char* code;
+};
+std::ostream& operator<<(std::ostream& out, Paint p);
+namespace paint {
+constexpr Paint reset{"\x1b[0m"}, bold{"\x1b[1m"}, red{"\x1b[91m"}, green{"\x1b[92m"},
+    yellow{"\x1b[93m"}, cyan{"\x1b[96m"}, dim{"\x1b[90m"};
+}
+
 std::string hex64(uint64_t v);
 std::string formatRip(uint64_t rip, bool logical);
 std::string formatBytes(const std::vector<uint8_t>& bytes);

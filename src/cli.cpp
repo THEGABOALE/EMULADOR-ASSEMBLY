@@ -57,7 +57,7 @@ bool parseInit(const std::string& source, const std::string& initText,
         auto extra = parseInitList(initText);
         init.insert(init.end(), extra.begin(), extra.end());
     } catch (const AsmError& e) {
-        out << "Error en los valores iniciales: " << e.what() << "\n";
+        out << paint::red << "Error en los valores iniciales: " << e.what() << "\n" << paint::reset;
         return false;
     }
     if (!init.empty()) {
@@ -108,6 +108,7 @@ void printHelp(std::ostream& out) {
            "  --init \"edi=7 esi=4\"     Valores iniciales de registros\n"
            "  --max N                  Límite de instrucciones (por defecto 1000)\n"
            "  --compacto               Traza compacta: sólo registros que cambian\n"
+           "  --sin-color              Salida sin colores\n"
            "  --version                Versiones de las bibliotecas\n";
 }
 
@@ -131,7 +132,7 @@ bool runAssembly(const std::string& source, const std::string& initText, Engine 
             haveEdu = true;
             ok = ok && edu.ok();
         } catch (const AsmError& e) {
-            out << "Error en el intérprete propio: " << e.what() << "\n";
+            out << paint::red << "Error en el intérprete propio: " << e.what() << "\n" << paint::reset;
             ok = false;
         }
     }
@@ -144,7 +145,7 @@ bool runAssembly(const std::string& source, const std::string& initText, Engine 
         }
         AssembleResult a = assembleIntel(prepareSourceForAssembler(source), kCodeBase);
         if (!a.ok) {
-            out << "Error al ensamblar: " << a.error << "\n";
+            out << paint::red << "Error al ensamblar: " << a.error << "\n" << paint::reset;
             return false;
         }
         out << "\nKeystone ensambló " << a.statements << " sentencias en " << a.bytes.size()
@@ -160,9 +161,9 @@ bool runAssembly(const std::string& source, const std::string& initText, Engine 
         auto diffs = compareResults(edu, real);
         out << "\nComparación intérprete propio vs Unicorn: ";
         if (diffs.empty()) {
-            out << "COINCIDEN: mismos registros, banderas, número de instrucciones y final.\n";
+            out << paint::green << "COINCIDEN: mismos registros, banderas, número de instrucciones y final.\n" << paint::reset;
         } else {
-            out << "DIFIEREN:\n";
+            out << paint::red << "DIFIEREN:\n" << paint::reset;
             for (const auto& d : diffs) out << "  - " << d << "\n";
             ok = false;
         }
@@ -204,7 +205,7 @@ std::string readAsmFromStream(std::istream& in, std::ostream& out, bool prompt) 
 
 void interactiveMenu(std::istream& in, std::ostream& out, Settings& s) {
     while (true) {
-        out << "\n========== EMULADOR x86-64 ==========\n"
+        out << "\n" << paint::bold << paint::cyan << "========== EMULADOR x86-64 ==========" << paint::reset << "\n"
             << "  1) Escribir un programa\n"
             << "  2) Abrir un archivo .asm\n"
             << "  3) Ejemplos de la clase\n"
@@ -231,7 +232,7 @@ void interactiveMenu(std::istream& in, std::ostream& out, Settings& s) {
             if (!ask(in, out, "Ruta del archivo: ", path)) return;
             std::string src, err;
             if (!readTextFile(unquote(path), src, err)) {
-                out << "Error: " << err << "\n";
+                out << paint::red << "Error: " << err << "\n" << paint::reset;
                 continue;
             }
             Engine e = askEngine(in, out);
@@ -266,7 +267,7 @@ void interactiveMenu(std::istream& in, std::ostream& out, Settings& s) {
             }
             bool ok = isFile ? readBinaryFile(path, code, err) : parseHexBytes(text, code, err);
             if (!ok) {
-                out << "Error: " << err << "\n";
+                out << paint::red << "Error: " << err << "\n" << paint::reset;
                 continue;
             }
             std::string init = askInit(in, out);
@@ -291,8 +292,15 @@ void interactiveMenu(std::istream& in, std::ostream& out, Settings& s) {
     }
 }
 
-int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::ostream& out) {
+int runCommandLine(const std::vector<std::string>& argsIn, std::istream& in, std::ostream& out) {
     Settings s;
+    std::vector<std::string> args;
+    for (const auto& a : argsIn) {
+        if (a == "--sin-color")
+            setColorEnabled(false);  // válido también con el menú
+        else
+            args.push_back(a);
+    }
     if (args.empty()) {
         interactiveMenu(in, out, s);
         return 0;
@@ -305,7 +313,7 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
         const std::string& a = args[i];
         auto value = [&](std::string& dst) {
             if (i + 1 >= args.size()) {
-                out << "Error: falta el valor de " << a << "\n";
+                out << paint::red << "Error: falta el valor de " << a << "\n" << paint::reset;
                 return false;
             }
             dst = args[++i];
@@ -339,7 +347,7 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
         } else if (a == "--max") {
             if (!value(v)) return 2;
             if (!parsePositive(v, s.run.maxInstructions)) {
-                out << "Error: --max necesita un número entero mayor que 0\n";
+                out << paint::red << "Error: --max necesita un número entero mayor que 0\n" << paint::reset;
                 return 2;
             }
         } else if (a == "--motor") {
@@ -348,11 +356,11 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
             else if (v == "real") engine = Engine::Real;
             else if (v == "ambos") engine = Engine::Both;
             else {
-                out << "Error: motor desconocido '" << v << "' (use edu, real o ambos)\n";
+                out << paint::red << "Error: motor desconocido '" << v << "' (use edu, real o ambos)\n" << paint::reset;
                 return 2;
             }
         } else {
-            out << "Error: opción desconocida '" << a << "'\n";
+            out << paint::red << "Error: opción desconocida '" << a << "'\n" << paint::reset;
             printHelp(out);
             return 2;
         }
@@ -361,7 +369,7 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
     int sources = !asmPath.empty() + !hex.empty() + !binPath.empty() + !example.empty() +
                   !assemblePath.empty();
     if (sources > 1) {
-        out << "Error: indique sólo una entrada (--asm, --hex, --bin, --ejemplo o --ensamblar)\n";
+        out << paint::red << "Error: indique sólo una entrada (--asm, --hex, --bin, --ejemplo o --ensamblar)\n" << paint::reset;
         return 2;
     }
 
@@ -375,18 +383,18 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
     if (!assemblePath.empty()) {
         std::string src;
         if (!readTextFile(assemblePath, src, err)) {
-            out << "Error: " << err << "\n";
+            out << paint::red << "Error: " << err << "\n" << paint::reset;
             return 1;
         }
         AssembleResult r = assembleIntel(prepareSourceForAssembler(src), kCodeBase);
         if (!r.ok) {
-            out << "Error al ensamblar: " << r.error << "\n";
+            out << paint::red << "Error al ensamblar: " << r.error << "\n" << paint::reset;
             return 1;
         }
         out << "Bytes (" << r.bytes.size() << "): " << formatBytes(r.bytes) << "\n";
         if (!outputPath.empty()) {
             if (!writeBinaryFile(outputPath, r.bytes, err)) {
-                out << "Error: " << err << "\n";
+                out << paint::red << "Error: " << err << "\n" << paint::reset;
                 return 1;
             }
             out << "Escrito en " << outputPath << "\n";
@@ -397,7 +405,7 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
         const auto& ex = classExamples();
         uint64_t k = 0;
         if (!parsePositive(example, k) || k > ex.size()) {
-            out << "Error: ejemplo no válido (1.." << ex.size() << ")\n";
+            out << paint::red << "Error: ejemplo no válido (1.." << ex.size() << ")\n" << paint::reset;
             return 2;
         }
         out << ex[k - 1].title << "\n" << ex[k - 1].source;
@@ -408,7 +416,7 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
         if (asmPath == "-") {
             src = readAsmFromStream(in, out, false);
         } else if (!readTextFile(asmPath, src, err)) {
-            out << "Error: " << err << "\n";
+            out << paint::red << "Error: " << err << "\n" << paint::reset;
             return 1;
         }
         return runAssembly(src, initText, engine, s, out) ? 0 : 1;
@@ -417,12 +425,12 @@ int runCommandLine(const std::vector<std::string>& args, std::istream& in, std::
         std::vector<uint8_t> code;
         bool ok = !hex.empty() ? parseHexBytes(hex, code, err) : readBinaryFile(binPath, code, err);
         if (!ok) {
-            out << "Error: " << err << "\n";
+            out << paint::red << "Error: " << err << "\n" << paint::reset;
             return 1;
         }
         return runBytes(code, initText, s, out) ? 0 : 1;
     }
-    out << "Error: no se indicó qué ejecutar\n";
+    out << paint::red << "Error: no se indicó qué ejecutar\n" << paint::reset;
     printHelp(out);
     return 2;
 }

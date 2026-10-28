@@ -15,6 +15,8 @@ registros y las banderas `ZF`, `SF`, `CF` y `OF`.
   elegir un ejemplo de la clase o pasar código máquina (bytes en hex o un archivo `.bin`).
 - **Traza paso a paso:** instrucción, registros después de ejecutarla (marca con `*` lo que
   cambió), banderas, siguiente `RIP` y si el salto se tomó o no. Al final, el estado final.
+- **Colores en la consola:** registros que cambian en amarillo, salto tomado en verde, no
+  tomado y errores en rojo. Si la salida se guarda en un archivo, sale sin colores.
 - **Valores iniciales** de registros, por ejemplo `edi=7 esi=4`.
 - **Límite de instrucciones** (1000 por defecto) para que un ciclo infinito no cuelgue el programa.
 
@@ -108,7 +110,7 @@ También se puede usar directo desde la línea de comandos:
 ```
 
 Otras opciones: `--motor edu|real|ambos`, `--max N` (límite de instrucciones),
-`--compacto` (solo muestra lo que cambia) y `--ensamblar A.asm --salida A.bin`.
+`--compacto` (solo muestra lo que cambia), `--sin-color` y `--ensamblar A.asm --salida A.bin`.
 
 ### Formato de un `.asm`
 
@@ -136,14 +138,15 @@ ctest --test-dir build --output-on-failure
 .\build\pruebas.exe          # con el detalle de cada prueba
 ```
 
-Son 33 pruebas con 600 comprobaciones. Revisan:
+Son 34 pruebas con 607 comprobaciones. Revisan:
 
 - banderas de cada instrucción en 8, 16, 32 y 64 bits, y los saltos condicionales;
 - todos los ejemplos de la clase con distintos valores iniciales, en los dos motores;
 - que los dos motores den exactamente el mismo resultado;
 - la traza: estado después de cada paso, salto tomado o no, `RET` final;
 - errores: sintaxis, etiquetas, bytes incompletos, memoria no válida, ciclos infinitos;
-- el menú, la línea de comandos, rutas con tildes o ñ, y el `.exe` real de principio a fin.
+- el menú, la línea de comandos, los colores, rutas con tildes o ñ, y el `.exe` real de
+  principio a fin.
 
 Además, una **prueba aleatoria** genera cientos de programas al azar y exige que el
 intérprete propio y Unicorn lleguen al mismo resultado. Para una pasada más larga:
@@ -155,7 +158,7 @@ $env:EMU_FUZZ_N = 10000; .\build\pruebas.exe; Remove-Item Env:EMU_FUZZ_N
 Resultado actual:
 
 ```
-600 comprobaciones, 0 fallos, 33 pruebas.
+607 comprobaciones, 0 fallos, 34 pruebas.
 100% tests passed out of 1
 ```
 

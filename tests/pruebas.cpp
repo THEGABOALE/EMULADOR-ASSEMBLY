@@ -867,6 +867,32 @@ TEST(diferencial_aleatorio_educativo_vs_unicorn) {
     CHECK(generated >= 400);
 }
 
+TEST(colores_en_consola) {
+    const std::string src = "mov eax, 1\ncmp eax, 1\njne otro\nje fin\notro:\nmov ebx, 1\nfin:\nret\n";
+    std::ostringstream con, sin;
+    setColorEnabled(true);
+    runAssembly(src, "", Engine::Educational, Settings{}, con);
+    runAssembly("mov eax,\n", "", Engine::Educational, Settings{}, con);
+    setColorEnabled(false);
+    runAssembly(src, "", Engine::Educational, Settings{}, sin);
+    std::string c = con.str();
+    CHECK(c.find("\x1b[92mTOMADO") != std::string::npos);     // salto tomado en verde
+    CHECK(c.find("\x1b[91mNO TOMADO") != std::string::npos);  // no tomado en rojo
+    CHECK(c.find("\x1b[93m0x0000000000000001*") != std::string::npos);  // registro que cambió
+    CHECK(c.find("\x1b[91mError") != std::string::npos);
+    CHECK(sin.str().find('\x1b') == std::string::npos);
+    // Sin color el texto es el mismo que con color, quitando los códigos.
+    std::string limpio;
+    for (size_t i = 0; i < c.size(); ++i) {
+        if (c[i] == '\x1b') {
+            while (i < c.size() && c[i] != 'm') ++i;
+            continue;
+        }
+        limpio += c[i];
+    }
+    CHECK_EQ(limpio.substr(0, sin.str().size()), sin.str());
+}
+
 TEST(ejecutable_de_extremo_a_extremo) {
     // Lanza el .exe real con la entrada por tubería, como lo haría un usuario.
     std::string exe = EMULADOR_EXE;
@@ -885,6 +911,7 @@ TEST(ejecutable_de_extremo_a_extremo) {
     readTextFile("salida_tmp.txt", out, err);
     CHECK(out.find("RAX = 0x000000000000000A") != std::string::npos);
     CHECK(out.find("Paso 3") != std::string::npos);
+    CHECK(out.find('\x1b') == std::string::npos);  // redirigido a archivo: sin colores
     std::remove("entrada_tmp.txt");
     std::remove("salida_tmp.txt");
 }
