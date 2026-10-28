@@ -64,9 +64,18 @@ if(WIN32)
   target_link_libraries(emulador PRIVATE shell32)  # CommandLineToArgvW
 endif()
 
+add_executable(pruebas tests/pruebas.cpp)
+target_link_libraries(pruebas PRIVATE emu_core)
+target_compile_definitions(pruebas PRIVATE
+  EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/examples"
+  EMULADOR_EXE="$<TARGET_FILE:emulador>")
+add_dependencies(pruebas emulador)
+
 if(MINGW)
   # Evita depender de libstdc++/libgcc del compilador para nuestro código.
-  target_link_options(emulador PRIVATE -static-libgcc -static-libstdc++)
+  foreach(t emulador pruebas)
+    target_link_options(${t} PRIVATE -static-libgcc -static-libstdc++)
+  endforeach()
 endif()
 
 # En Windows se copian junto al .exe las DLL de las bibliotecas (y sus
@@ -86,3 +95,6 @@ if(WIN32)
       COMMENT "Copiando DLL de Unicorn/Capstone/Keystone junto al ejecutable")
   endif()
 endif()
+
+enable_testing()
+add_test(NAME pruebas COMMAND pruebas)
