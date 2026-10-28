@@ -1,0 +1,13 @@
+build/
+build-*/
+*.exe
+*.o
+*.obj
+.claude/
+
+# Archivos temporales de las pruebas y de editores
+*_tmp.*
+Testing/
+CMakeUserPresets.json
+.vscode/
+.idea/
