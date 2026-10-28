@@ -48,10 +48,41 @@ add_library(emu_core STATIC
   src/interpreter.cpp
   src/trace.cpp
   src/machine.cpp
-  src/hexutil.cpp)
+  src/hexutil.cpp
+  src/examples.cpp
+  src/cli.cpp)
 target_include_directories(emu_core PUBLIC src ${EMU_DEP_INCS})
 target_compile_definitions(emu_core PUBLIC ${EMU_DEP_DEFS})
 target_link_libraries(emu_core PUBLIC ${EMU_DEP_LIBS})
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(emu_core PRIVATE -Wall -Wextra)
+endif()
+
+add_executable(emulador src/main.cpp)
+target_link_libraries(emulador PRIVATE emu_core)
+if(WIN32)
+  target_link_libraries(emulador PRIVATE shell32)  # CommandLineToArgvW
+endif()
+
+if(MINGW)
+  # Evita depender de libstdc++/libgcc del compilador para nuestro código.
+  target_link_options(emulador PRIVATE -static-libgcc -static-libstdc++)
+endif()
+
+# En Windows se copian junto al .exe las DLL de las bibliotecas (y sus
+# dependencias de tiempo de ejecución) para poder ejecutarlo sin configurar PATH.
+if(WIN32)
+  get_filename_component(EMU_COMPILER_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  set(EMU_RUNTIME_DLLS "")
+  foreach(dll libunicorn.dll libcapstone.dll libkeystone.dll
+              libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll)
+    if(EXISTS "${EMU_COMPILER_BIN}/${dll}")
+      list(APPEND EMU_RUNTIME_DLLS "${EMU_COMPILER_BIN}/${dll}")
+    endif()
+  endforeach()
+  if(EMU_RUNTIME_DLLS)
+    add_custom_command(TARGET emulador POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EMU_RUNTIME_DLLS} $<TARGET_FILE_DIR:emulador>
+      COMMENT "Copiando DLL de Unicorn/Capstone/Keystone junto al ejecutable")
+  endif()
 endif()
