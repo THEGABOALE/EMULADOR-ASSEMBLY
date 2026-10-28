@@ -138,7 +138,7 @@ ctest --test-dir build --output-on-failure
 .\build\pruebas.exe          # con el detalle de cada prueba
 ```
 
-Son 34 pruebas con 607 comprobaciones. Revisan:
+Son 36 pruebas con 643 comprobaciones. Revisan:
 
 - banderas de cada instrucción en 8, 16, 32 y 64 bits, y los saltos condicionales;
 - todos los ejemplos de la clase con distintos valores iniciales, en los dos motores;
@@ -158,13 +158,21 @@ $env:EMU_FUZZ_N = 10000; .\build\pruebas.exe; Remove-Item Env:EMU_FUZZ_N
 Resultado actual:
 
 ```
-607 comprobaciones, 0 fallos, 34 pruebas.
+643 comprobaciones, 0 fallos, 36 pruebas.
 100% tests passed out of 1
 ```
 
-Con 10 000 programas aleatorios: 8153 comparados y 0 diferencias.
+Con 10 000 programas aleatorios: 8153 comparados y 0 diferencias. Los 14 ejemplos de
+`examples/` dan el mismo resultado en los dos motores.
 
-Cosas que encontraron las pruebas y ya están resueltas: Keystone 0.9.2 a veces lee
-`mov eax, 255` como `0x255`, se cuelga con líneas que empiezan con un signo (`[rax]`,
-`, 3`) y cierra el programa con `mov ah, sil`. El emulador evita las tres situaciones y
-muestra un error claro.
+Cosas que encontraron las pruebas y ya están resueltas:
+
+- Keystone 0.9.2 a veces lee `mov eax, 255` como `0x255`, se cuelga con líneas que
+  empiezan con un signo (`[rax]`, `, 3`) y cierra el programa con `mov ah, sil`. El
+  emulador evita las tres situaciones y muestra un error claro.
+- La traza de Unicorn decidía si un salto condicional se tomó mirando si el RIP cambió,
+  y marcaba como "no tomado" un `je` hacia la instrucción siguiente. Ahora lo decide la
+  condición del salto con las banderas.
+- Con un RSP inválido (por ejemplo `rsp=4`), `push` escribía fuera de la pila simulada
+  porque la comprobación de límites se desbordaba. Ahora termina con el error "acceso a
+  memoria no mapeada".

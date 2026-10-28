@@ -223,11 +223,26 @@ std::string describeFlow(const std::string& text, uint64_t rip, size_t size, con
     if (m == "jmp") return "Salto incondicional JMP a " + hex64(nextRip) + ": TOMADO";
     if (m == "call") return "CALL a " + hex64(nextRip) + ": se apila la dirección de retorno " + hex64(fall);
     if (conditionForMnemonic(m, c)) {
-        bool taken = nextRip != fall;
+        // Un Jcc no modifica banderas: si se toma lo deciden las banderas de antes.
+        // Comparar nextRip con la continuación fallaría cuando el destino es justo
+        // la instrucción siguiente (se toma, pero RIP queda igual).
+        bool taken = evalCondition(c, before);
         std::string s = "Salto condicional " + upper(m) + ": " + (taken ? "TOMADO" : "NO TOMADO") +
                         " (requiere " + condRequirement(c) + "; banderas antes: " +
                         flagsText(before) + ")";
-        if (taken != evalCondition(c, before)) s += " [AVISO: no coincide con la regla teórica]";
+        // Comprobación cruzada con Unicorn: el RIP real debe ser el destino o la continuación.
+        uint64_t target = 0;
+        size_t sp = text.find(' ');
+        bool haveTarget = false;
+        if (sp != std::string::npos) {
+            try {
+                target = std::stoull(text.substr(sp + 1), nullptr, 16);
+                haveTarget = true;
+            } catch (...) {
+            }
+        }
+        if (haveTarget && nextRip != (taken ? target : fall))
+            s += " [AVISO: el RIP de Unicorn no coincide con la regla teórica]";
         return s;
     }
     if (m.rfind("loop", 0) == 0 || m == "jrcxz" || m == "jecxz")

@@ -53,8 +53,10 @@ public:
     }
 
 private:
+    // Los 8 bytes [addr, addr+8) deben estar dentro de la pila. No se calcula
+    // addr + 8: con addr cerca de 2^64 se desbordaría (p. ej. PUSH con RSP=4).
     static void check(uint64_t addr, const char* kind) {
-        if (addr < kStackBase || addr + 8 > kStackBase + kStackSize) {
+        if (addr < kStackBase || addr - kStackBase > kStackSize - 8) {
             throw ExecError(std::string("acceso a memoria no mapeada (") + kind +
                             " de 8 bytes en " + hex64(addr) + ")");
         }

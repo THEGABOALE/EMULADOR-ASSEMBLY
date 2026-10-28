@@ -867,6 +867,62 @@ TEST(diferencial_aleatorio_educativo_vs_unicorn) {
     CHECK(generated >= 400);
 }
 
+// ---------------------------------------------------------------- regresiones de la entrega
+
+TEST(jcc_tomado_hacia_la_instruccion_siguiente) {
+    // JE con ZF=1 cuyo destino es justo la instrucción siguiente: el RIP posterior
+    // coincide con el de continuación, pero el salto SÍ se toma.
+    const std::string src = "cmp eax, eax\nje siguiente\nsiguiente:\nret\n";
+    for (const RunResult& r : {edu(src), real(src)}) {
+        CHECK(r.ok());
+        CHECK_EQ(r.steps.size(), size_t(3));
+        if (r.steps.size() < 2) continue;
+        const std::string& f = r.steps[1].flow;
+        std::cout << "    (" << r.engine << ") " << f << "\n";
+        CHECK(f.find(": TOMADO") != std::string::npos);
+        CHECK(f.find("NO TOMADO") == std::string::npos);
+        CHECK(f.find("AVISO") == std::string::npos);
+    }
+    // Los saltos normales se siguen informando bien: tomado hacia delante, no tomado.
+    const std::string src2 = "mov eax, 1\ncmp eax, 1\nje igual\njne distinto\nigual:\nret\ndistinto:\nret\n";
+    const std::string src3 = "mov eax, 1\ncmp eax, 2\nje igual\nmov ebx, 1\nigual:\nret\n";
+    for (const RunResult& r : {real(src2), edu(src2)}) {
+        CHECK(r.ok());
+        if (r.steps.size() < 3) continue;
+        CHECK(r.steps[2].flow.find(": TOMADO") != std::string::npos);
+    }
+    for (const RunResult& r : {real(src3), edu(src3)}) {
+        CHECK(r.ok());
+        if (r.steps.size() < 3) continue;
+        CHECK(r.steps[2].flow.find("NO TOMADO") != std::string::npos);
+        CHECK(r.steps[2].flow.find("AVISO") == std::string::npos);
+        CHECK_EQ(e32(r, RBX), 1u);
+    }
+}
+
+TEST(pila_con_rsp_invalido) {
+    // RSP=4: PUSH escribiría en 4-8 = 0xFFFFFFFFFFFFFFFC; "addr + 8" se desborda a 4
+    // y la comprobación anterior lo dejaba pasar. Debe ser un error controlado.
+    for (const char* src : {"push rax\nret\n", "pop rax\nret\n"}) {
+        RunResult r = edu(src, "rsp=4");
+        CHECK(r.reason == StopReason::Error);
+        CHECK(r.message.find("no mapeada") != std::string::npos);
+        CHECK_EQ(r.executed, 0ULL);
+        CHECK_EQ(r.final.gpr[RSP], 4ULL);  // el PUSH fallido no movió RSP
+        std::cout << "    " << r.message << "\n";
+    }
+    // Unicorn también lo trata como acceso no mapeado.
+    RunResult u = real("push rax\nret\n", "rsp=4");
+    CHECK(u.reason == StopReason::Error);
+    // Bordes de la pila simulada [0x7FF00000, 0x7FF10000) (sin RET: con RSP cambiado
+    // ya no apunta al centinela).
+    CHECK(edu("push rax\npop rbx\n", "rsp=0x7FF10000").ok());   // usa [fin-8, fin)
+    CHECK(edu("push rax\n", "rsp=0x7FF10001").reason == StopReason::Error);  // se sale 1 byte
+    CHECK(edu("push rax\n", "rsp=0x7FF00008").ok());            // usa [inicio, inicio+8)
+    CHECK(edu("push rax\n", "rsp=0x7FF00007").reason == StopReason::Error);  // empieza antes
+    CHECK(edu("pop rax\n", "rsp=0x7FF0FFF9").reason == StopReason::Error);   // lee 1 byte fuera
+}
+
 TEST(colores_en_consola) {
     const std::string src = "mov eax, 1\ncmp eax, 1\njne otro\nje fin\notro:\nmov ebx, 1\nfin:\nret\n";
     std::ostringstream con, sin;
