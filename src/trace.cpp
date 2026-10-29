@@ -1,5 +1,6 @@
 #include "trace.hpp"
 
+#include <cctype>
 #include <cstdio>
 #include <iomanip>
 #include <sstream>
@@ -63,6 +64,62 @@ std::string regLabel(int idx) {
     return n;
 }
 
+// Dónde deja su resultado una instrucción: en el registro destino (el primer
+// operando), en ningún lado (CMP y TEST sólo cambian banderas) o no aplica
+// (saltos, CALL, RET, PUSH, NOP...).
+struct StepResult {
+    enum Kind { None, Register, FlagsOnly } kind = None;
+    RegRef reg;
+    std::string mnemonic;
+};
+
+StepResult stepResult(const std::string& text) {
+    StepResult r;
+    size_t sp = text.find(' ');
+    for (char c : text.substr(0, sp))
+        r.mnemonic += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (r.mnemonic == "cmp" || r.mnemonic == "test") {
+        r.kind = StepResult::FlagsOnly;
+        return r;
+    }
+    if (sp == std::string::npos || r.mnemonic[0] == 'j' || r.mnemonic == "call" ||
+        r.mnemonic == "push" || r.mnemonic.rfind("loop", 0) == 0)
+        return r;
+    std::string ops = text.substr(sp + 1);
+    size_t comma = ops.find(',');
+    // MUL, DIV e IMUL de un operando escriben RDX:RAX, no su operando.
+    if (comma == std::string::npos &&
+        (r.mnemonic == "mul" || r.mnemonic == "div" || r.mnemonic == "idiv" || r.mnemonic == "imul"))
+        return r;
+    std::string dst = ops.substr(0, comma);
+    dst.erase(0, dst.find_first_not_of(' '));
+    dst.erase(dst.find_last_not_of(' ') + 1);
+    if (auto reg = lookupRegister(dst)) {
+        r.kind = StepResult::Register;
+        r.reg = *reg;
+    }
+    return r;
+}
+
+std::string upperName(const RegRef& reg) {
+    std::string n = registerName(reg);
+    for (char& c : n) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return n;
+}
+
+// Valor de un registro en su tamaño: decimal con signo, hex y, si es negativo,
+// también sin signo. Ej.: "11 (0x0000000B)" o "-1 (0xFFFFFFFF; sin signo 4294967295)".
+std::string valueText(uint64_t v, int width) {
+    uint64_t mask = widthMask(width);
+    v &= mask;
+    int64_t sv = static_cast<int64_t>(v);
+    if (width < 64 && (v >> (width - 1)) & 1) sv = static_cast<int64_t>(v | ~mask);
+    char hex[32];
+    std::snprintf(hex, sizeof hex, "0x%0*llX", width / 4, static_cast<unsigned long long>(v));
+    if (sv < 0) return std::to_string(sv) + " (" + hex + "; sin signo " + std::to_string(v) + ")";
+    return std::to_string(v) + " (" + hex + ")";
+}
+
 void printRegisters(std::ostream& out, const CpuState& s, const CpuState* prev) {
     for (size_t i = 0; i < kDisplayOrder.size(); ++i) {
         int idx = kDisplayOrder[i];
@@ -114,6 +171,13 @@ void printStep(std::ostream& out, const StepRecord& s, const CpuState& prev, boo
         out << "  Registros después de ejecutar (* = cambió):\n";
         printRegisters(out, s.after, &prev);
     }
+    StepResult res = stepResult(s.text);
+    if (res.kind == StepResult::Register)
+        out << "  " << paint::bold << paint::green << "Resultado: " << upperName(res.reg) << " = "
+            << valueText(readReg(s.after, res.reg), res.reg.width) << paint::reset << "\n";
+    else if (res.kind == StepResult::FlagsOnly)
+        out << "  Resultado: no se guarda (" << (res.mnemonic == "cmp" ? "CMP" : "TEST")
+            << " sólo actualiza las banderas)\n";
     out << "  Banderas después: " << flagsText(s.after.flags) << "\n";
     out << "  RIP siguiente: " << formatRip(s.after.rip, logicalRip);
     if (!s.flow.empty()) {
@@ -147,6 +211,19 @@ void printFinalState(std::ostream& out, const RunResult& r) {
     out << "  Banderas: ZF=" << r.final.flags.zf << "  SF=" << r.final.flags.sf
         << "  CF=" << r.final.flags.cf << "  OF=" << r.final.flags.of << "\n";
     out << "  Instrucciones ejecutadas: " << r.executed << "\n";
+    // El valor de retorno de una función va en EAX (convención System V); además
+    // se muestra la última instrucción que dejó un resultado en un registro.
+    RegRef eax = *lookupRegister("eax");
+    out << "  " << paint::bold << paint::green << "Resultado (EAX, valor de retorno): "
+        << valueText(readReg(r.final, eax), 32) << paint::reset << "\n";
+    for (auto it = r.steps.rbegin(); it != r.steps.rend(); ++it) {
+        StepResult res = stepResult(it->text);
+        if (res.kind != StepResult::Register) continue;
+        out << "  Última operación con resultado: paso " << it->step << " '" << it->text << "' -> "
+            << upperName(res.reg) << " = " << valueText(readReg(it->after, res.reg), res.reg.width)
+            << "\n";
+        break;
+    }
     out << "  Finalización: " << (r.ok() ? paint::green : paint::red) << (r.ok() ? "" : "ERROR - ")
         << stopReasonText(r.reason) << ": " << r.message << paint::reset << "\n";
     out << "================================================================================\n";

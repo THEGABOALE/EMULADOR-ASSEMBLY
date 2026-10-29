@@ -14,7 +14,10 @@ registros y las banderas `ZF`, `SF`, `CF` y `OF`.
 - **Varias formas de cargar el programa:** escribirlo en la consola, abrir un `.asm`,
   elegir un ejemplo de la clase o pasar código máquina (bytes en hex o un archivo `.bin`).
 - **Traza paso a paso:** instrucción, registros después de ejecutarla (marca con `*` lo que
-  cambió), banderas, siguiente `RIP` y si el salto se tomó o no. Al final, el estado final.
+  cambió), el **resultado** de la operación (por ejemplo `Resultado: EAX = 11`), banderas,
+  siguiente `RIP` y si el salto se tomó o no.
+- **Estado final** con todos los registros y el resultado: el valor de retorno en `EAX` y la
+  última operación que dejó un resultado (`paso 2 'add eax, esi' -> EAX = 11`).
 - **Colores en la consola:** registros que cambian en amarillo, salto tomado en verde, no
   tomado y errores en rojo. Si la salida se guarda en un archivo, sale sin colores.
 - **Valores iniciales** de registros, por ejemplo `edi=7 esi=4`.
@@ -95,8 +98,8 @@ sin configurar nada más.
   0) Salir
 ```
 
-Al escribir un programa se termina con una línea `FIN`. Luego se elige el motor
-(1 intérprete propio, 2 Unicorn, 3 comparar los dos) y, si se quiere, valores iniciales.
+Se elige el motor (1 intérprete propio, 2 Unicorn, 3 comparar los dos) y, si se quiere,
+valores iniciales como `edi=7 esi=4`. Al escribir un programa se termina con una línea `FIN`.
 
 También se puede usar directo desde la línea de comandos:
 
@@ -138,12 +141,13 @@ ctest --test-dir build --output-on-failure
 .\build\pruebas.exe          # con el detalle de cada prueba
 ```
 
-Son 36 pruebas con 643 comprobaciones. Revisan:
+Son 37 pruebas con 669 comprobaciones. Revisan:
 
 - banderas de cada instrucción en 8, 16, 32 y 64 bits, y los saltos condicionales;
 - todos los ejemplos de la clase con distintos valores iniciales, en los dos motores;
 - que los dos motores den exactamente el mismo resultado;
-- la traza: estado después de cada paso, salto tomado o no, `RET` final;
+- la traza: estado después de cada paso, el resultado de cada operación, salto tomado o no,
+  `RET` final;
 - errores: sintaxis, etiquetas, bytes incompletos, memoria no válida, ciclos infinitos;
 - el menú, la línea de comandos, los colores, rutas con tildes o ñ, y el `.exe` real de
   principio a fin.
@@ -158,7 +162,7 @@ $env:EMU_FUZZ_N = 10000; .\build\pruebas.exe; Remove-Item Env:EMU_FUZZ_N
 Resultado actual:
 
 ```
-643 comprobaciones, 0 fallos, 36 pruebas.
+669 comprobaciones, 0 fallos, 37 pruebas.
 100% tests passed out of 1
 ```
 

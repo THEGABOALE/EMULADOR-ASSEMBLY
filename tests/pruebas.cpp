@@ -923,6 +923,52 @@ TEST(pila_con_rsp_invalido) {
     CHECK(edu("pop rax\n", "rsp=0x7FF0FFF9").reason == StopReason::Error);   // lee 1 byte fuera
 }
 
+TEST(resultado_de_cada_operacion) {
+    auto traza = [](const RunResult& r) {
+        std::ostringstream out;
+        printRun(out, r, TraceOptions{});
+        return out.str();
+    };
+    auto veces = [](const std::string& t, const std::string& s) {
+        size_t n = 0;
+        for (size_t p = t.find(s); p != std::string::npos; p = t.find(s, p + 1)) ++n;
+        return n;
+    };
+    // Suma: el resultado del ADD en su paso y el valor de retorno al final, en los dos motores.
+    for (const RunResult& r : {edu(readExample("01_suma.asm")), real(readExample("01_suma.asm"))}) {
+        std::string t = traza(r);
+        CHECK(t.find("Resultado: EAX = 7 (0x00000007)") != std::string::npos);
+        CHECK(t.find("Resultado: EAX = 11 (0x0000000B)") != std::string::npos);
+        CHECK(t.find("Resultado (EAX, valor de retorno): 11 (0x0000000B)") != std::string::npos);
+        CHECK(t.find("Última operación con resultado: paso 2 'add eax, esi' -> EAX = 11") !=
+              std::string::npos);
+        CHECK_EQ(veces(t, "\n  Resultado: "), size_t(2));  // RET no tiene resultado
+    }
+    // CMP no guarda el resultado.
+    std::string c = traza(edu(readExample("02_mayor.asm")));
+    CHECK(c.find("Resultado: no se guarda (CMP sólo actualiza las banderas)") != std::string::npos);
+    // Negativos en su tamaño; el resultado no tiene que estar en EAX.
+    for (const RunResult& r : {edu("mov ebx, 5\nadd ebx, -8\nmov al, 200\nmov rcx, -1\nret\n"),
+                               real("mov ebx, 5\nadd ebx, -8\nmov al, 200\nmov rcx, -1\nret\n")}) {
+        std::string t = traza(r);
+        CHECK(t.find("Resultado: EBX = -3 (0xFFFFFFFD; sin signo 4294967293)") != std::string::npos);
+        CHECK(t.find("Resultado: AL = -56 (0xC8; sin signo 200)") != std::string::npos);
+        CHECK(t.find("Resultado: RCX = -1 (0xFFFFFFFFFFFFFFFF; sin signo 18446744073709551615)") !=
+              std::string::npos);
+        CHECK(t.find("Resultado (EAX, valor de retorno): -56 (0x000000C8; sin signo 200)") ==
+              std::string::npos);  // EAX vale 200 entero, no -56
+        CHECK(t.find("Resultado (EAX, valor de retorno): 200 (0x000000C8)") != std::string::npos);
+        CHECK(t.find("Última operación con resultado: paso 4") != std::string::npos);
+    }
+    // PUSH, saltos y RET no tienen destino; POP sí.
+    CHECK_EQ(veces(traza(edu("mov eax, 7\npush rax\npop rbx\njmp fin\nfin:\nret\n")), "\n  Resultado: "),
+             size_t(2));
+    // MUL de un operando escribe EDX:EAX, no su operando: no se muestra un resultado engañoso.
+    std::string m = traza(real("mov eax, 3\nmov ecx, 4\nmul ecx\nret\n"));
+    CHECK_EQ(veces(m, "\n  Resultado: "), size_t(2));
+    CHECK(m.find("Resultado (EAX, valor de retorno): 12 (0x0000000C)") != std::string::npos);
+}
+
 TEST(colores_en_consola) {
     const std::string src = "mov eax, 1\ncmp eax, 1\njne otro\nje fin\notro:\nmov ebx, 1\nfin:\nret\n";
     std::ostringstream con, sin;
